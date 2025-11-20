@@ -65,16 +65,18 @@ async function main() {
             .toArray(),
     );
 
-    console.log(pc.cyan("Highest Rated Movie Per Year"));
+    console.log(pc.cyan("Most Weighted Rated Movies"));
     console.log(pc.blue("PostgreSQL"));
     await benchmark(() =>
         pg.query(`
-    SELECT DISTINCT ON (year)
-        year,
-        title,
-        rating
-    FROM imdb
-    ORDER BY year, rating DESC;
+        SELECT
+            title,
+            rating,
+            votes,
+            (rating * votes) AS weighted_score
+        FROM imdb
+        ORDER BY weighted_score DESC
+        LIMIT 20;
 `),
     );
 
@@ -82,15 +84,26 @@ async function main() {
     await benchmark(() =>
         collection
             .aggregate([
-                { $sort: { year: 1, rating: -1 } },
                 {
-                    $group: {
-                        _id: "$year",
-                        title: { $first: "$title" },
-                        rating: { $first: "$rating" },
+                    $addFields: {
+                        weighted_score: { $multiply: ["$rating", "$votes"] },
                     },
                 },
-                { $sort: { _id: 1 } },
+                {
+                    $sort: { weighted_score: -1 },
+                },
+                {
+                    $limit: 20,
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        title: 1,
+                        rating: 1,
+                        votes: 1,
+                        weighted_score: 1,
+                    },
+                },
             ])
             .toArray(),
     );
